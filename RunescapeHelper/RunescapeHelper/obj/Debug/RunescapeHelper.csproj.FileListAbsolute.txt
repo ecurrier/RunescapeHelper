@@ -1,0 +1,15 @@
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\bin\Debug\RunescapeHelper.exe.config
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\bin\Debug\RunescapeHelper.exe
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\bin\Debug\RunescapeHelper.pdb
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.csprojResolveAssemblyReference.cache
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Properties.Resources.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.csproj.GenerateResource.Cache
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.exe
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.pdb
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.MainForm.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.AutoClicker.AutoClickerMainForm.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.SeersVillageAgility.SeersVillageAgilityMainForm.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.SeersVillageAgility.ObstacleColorConfigurationDialog.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.SeersVillageAgility.TeleportConfigurationDialog.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.Combat.CombatMainForm.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.Combat.NpcColorConfigurationDialog.resources
