@@ -87,9 +87,9 @@ namespace RunescapeHelper.Modules.SeersVillageAgility
             List<Point> result = new List<Point>();
             using (Bitmap bmp = GetScreenShot())
             {
-                for (int x = 0; x < bmp.Width; x += 10)
+                for (int y = bmp.Height - 1; y >= 0; y -= 10)
                 {
-                    for (int y = 0; y < bmp.Height; y += 10)
+                    for (int x = 0; x < bmp.Width; x += 10)
                     {
                         var pixel = bmp.GetPixel(x, y);
                         var pixelColor = pixel.ToArgb();
