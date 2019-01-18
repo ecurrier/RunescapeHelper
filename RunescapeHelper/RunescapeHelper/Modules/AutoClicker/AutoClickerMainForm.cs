@@ -1,4 +1,5 @@
 ﻿using Gma.UserActivityMonitor;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -39,8 +40,8 @@ namespace RunescapeHelper.Modules.AutoClicker
         private bool playbackActive = false;
         private bool recordingActive = false;
         private bool suspensionActive = false;
-        private bool nextActionPrecise = false;
         private bool runInfinitely = false;
+        private bool setPlaybackActive = false;
 
         private bool isShiftDown = false;
         private bool isControlDown = false;
@@ -51,7 +52,9 @@ namespace RunescapeHelper.Modules.AutoClicker
         private Stopwatch playbackStopWatch = new Stopwatch();
         private Stopwatch autoChatterStopwatch = new Stopwatch();
         private BackgroundWorker playbackThread = new BackgroundWorker();
-        private List<EventRecord> recordingEvents = new List<EventRecord>();
+
+        private Recording currentRecording = new Recording();
+        private RecordingSet currentRecordingSet = new RecordingSet();
 
         public AutoClickerMainForm()
         {
@@ -91,39 +94,31 @@ namespace RunescapeHelper.Modules.AutoClicker
                 leftClick = false;
             }
 
-            LogMouseDownEvent((int)EventTypes.Mouse, e.X, e.Y, leftClick, recordingStopwatch.ElapsedMilliseconds, nextActionPrecise);
-
-            if (nextActionPrecise)
-            {
-                ResetNextActionPrecise();
-            }
+            LogMouseDownEvent((int)EventTypes.Mouse, e.X, e.Y, leftClick, recordingStopwatch.ElapsedMilliseconds);
         }
 
-        private void LogMouseDownEvent(int eventType, int xCoord, int yCoord, bool leftClick, long time, bool preciseClick)
+        private void LogMouseDownEvent(int eventType, int xCoord, int yCoord, bool leftClick, long time)
         {
             var timeSpan = TimeSpan.FromMilliseconds(time);
-            recordingEvents.Add(new EventRecord()
+            currentRecording.events.Add(new Event()
             {
                 eventType = eventType,
                 x = xCoord,
                 y = yCoord,
                 leftClick = leftClick,
                 time = time,
-                preciseClick = preciseClick,
                 shiftModifier = isShiftDown,
                 controlModifier = isControlDown,
                 altModifier = isAltDown
             });
 
             string action = leftClick ? "Left Click" : "Right Click";
-            string preciseClickLabel = preciseClick ? "Yes" : "No"; 
             var eventLogItem = new ListViewItem(action)
             {
                 SubItems =
                 {
                     $"({xCoord},{yCoord})",
-                    $"{timeSpan.Minutes}:{timeSpan.Seconds}:{timeSpan.Milliseconds}",
-                    preciseClickLabel
+                    $"{timeSpan.Minutes}:{timeSpan.Seconds}:{timeSpan.Milliseconds}"
                 }
             };
 
@@ -135,13 +130,13 @@ namespace RunescapeHelper.Modules.AutoClicker
             switch (e.KeyCode)
             {
                 case Keys.F1:
-                    StartPlayback();
+                    StartCurrentRecordingPlayback();
                     return;
                 case Keys.F2:
-                    EndPlayback();
+                    EndCurrentRecordingPlayback();
                     return;
                 case Keys.F3:
-                    SuspendPlayback();
+                    SuspendCurrentRecordingPlayback();
                     return;
                 case Keys.LShiftKey:
                 case Keys.RShiftKey:
@@ -190,7 +185,7 @@ namespace RunescapeHelper.Modules.AutoClicker
         private void LogKeyDownEvent(int eventType, int keyCode, string keyLabel, long time)
         {
             var timeSpan = TimeSpan.FromMilliseconds(time);
-            recordingEvents.Add(new EventRecord()
+            currentRecording.events.Add(new Event()
             {
                 eventType = eventType,
                 keyCode = keyCode,
@@ -216,6 +211,9 @@ namespace RunescapeHelper.Modules.AutoClicker
             recordingTimer.Start();
             recordingStopwatch.Start();
             recordingActive = true;
+
+            eventLog.Items.Clear();
+            currentRecording = new Recording();
         }
 
         private void endButton_Click(object sender, EventArgs e)
@@ -228,7 +226,7 @@ namespace RunescapeHelper.Modules.AutoClicker
             recordingActive = false;
 
             // Remove the click recorded for ending the recording
-            recordingEvents.RemoveAt(recordingEvents.Count - 1);
+            currentRecording.events.RemoveAt(currentRecording.events.Count - 1);
             eventLog.Items.RemoveAt(eventLog.Items.Count - 1);
 
             recordingTimer.Stop();
@@ -241,7 +239,7 @@ namespace RunescapeHelper.Modules.AutoClicker
             timerText.Text = $"{elapsed.Minutes}:{elapsed.Seconds}:{elapsed.Milliseconds}";
         }
 
-        private void mouseClick(int x, int y, bool leftClick, bool preciseClick, bool shiftModifier, bool controlModifier, bool altModifier)
+        private void mouseClick(int x, int y, bool leftClick, bool shiftModifier, bool controlModifier, bool altModifier)
         {
             Cursor.Position = new Point(x, y);
 
@@ -260,7 +258,7 @@ namespace RunescapeHelper.Modules.AutoClicker
                 keybd_event(0xA4, 0, 0, 0);
             }
 
-            Thread.Sleep(new Random().Next(350, 550));
+            Thread.Sleep(new Random().Next(75, 100));
 
             if (leftClick)
             {
@@ -275,7 +273,7 @@ namespace RunescapeHelper.Modules.AutoClicker
 
             // Release Keys
 
-            Thread.Sleep(new Random().Next(350, 550));
+            Thread.Sleep(new Random().Next(75, 100));
             if (shiftModifier)
             {
                 keybd_event(0x10, 0, 0x2, 0); // 0x2 using in dwFlags parameter to signify key is being released
@@ -297,12 +295,7 @@ namespace RunescapeHelper.Modules.AutoClicker
             keybd_event(Convert.ToByte(keyCode), 0, 0, 0);
         }
 
-        private void replayButton_Click(object sender, EventArgs e)
-        {
-            StartPlayback();
-        }
-
-        private void StartPlayback()
+        private void StartCurrentRecordingPlayback()
         {
             if (playbackActive)
             {
@@ -310,7 +303,6 @@ namespace RunescapeHelper.Modules.AutoClicker
             }
 
             playbackActive = true;
-            progressBar.Maximum = (int)recordingEvents.Last().time;
 
             if (!string.IsNullOrEmpty(loopCounterText.Text))
             {
@@ -326,62 +318,82 @@ namespace RunescapeHelper.Modules.AutoClicker
 
             while (true)
             {
-                var i = 0;
-                playbackStopWatch.Restart();
-
-                while (i < recordingEvents.Count)
+                try
                 {
-                    var recordingEvent = recordingEvents[i];
+                    // If running set playback, set new currentRecording
+                    if (setPlaybackActive)
+                    {
+                        var random = new Random();
+                        currentRecording = currentRecordingSet.recordings[random.Next(currentRecordingSet.recordings.Count)];
+                    }
 
-                    Invoke((MethodInvoker)delegate {
-                        UpdateProgressBar((int)playbackStopWatch.ElapsedMilliseconds);
+                    Invoke((MethodInvoker)delegate
+                    {
+                        progressBar.Maximum = (int)currentRecording.events.Last().time;
                     });
 
-                    if (playbackThread.CancellationPending)
+                    var i = 0;
+                    playbackStopWatch.Restart();
+
+                    while (i < currentRecording.events.Count)
                     {
-                        e.Cancel = true;
-                        return;
+                        var recordingEvent = currentRecording.events[i];
+
+                        Invoke((MethodInvoker)delegate
+                        {
+                            UpdateProgressBar((int)playbackStopWatch.ElapsedMilliseconds);
+                        });
+
+                        if (playbackThread.CancellationPending)
+                        {
+                            e.Cancel = true;
+                            return;
+                        }
+
+                        if (recordingEvent.time <= playbackStopWatch.ElapsedMilliseconds)
+                        {
+                            // Stop the stopwatch while click is performed since stopwatch continues running in the background
+                            playbackStopWatch.Stop();
+
+                            if (recordingEvent.eventType == (int)EventTypes.Mouse)
+                            {
+                                mouseClick(recordingEvent.x, recordingEvent.y, recordingEvent.leftClick, recordingEvent.shiftModifier, recordingEvent.controlModifier, recordingEvent.altModifier);
+                            }
+                            else if (recordingEvent.eventType == (int)EventTypes.Key)
+                            {
+                                keyClick(recordingEvent.keyCode);
+                            }
+
+                            var nextEvent = i == currentRecording.events.Count - 1 ? null : currentRecording.events[i + 1];
+                            if (nextEvent != null)
+                            {
+                                var downTime = nextEvent.time - playbackStopWatch.ElapsedMilliseconds;
+
+                                playbackStopWatch.Start();
+                                Thread.Sleep((int)downTime);
+                            }
+                            else
+                            {
+                                playbackStopWatch.Start();
+                            }
+
+                            i++;
+                        }
                     }
 
-                    if (recordingEvent.time <= playbackStopWatch.ElapsedMilliseconds)
+                    if (!runInfinitely)
                     {
-                        // Stop the stopwatch while click is performed since stopwatch continues running in the background
-                        playbackStopWatch.Stop();
-
-                        if (recordingEvent.eventType == (int)EventTypes.Mouse)
+                        playbackLoopAmount--;
+                        if (playbackLoopAmount == 0)
                         {
-                            mouseClick(recordingEvent.x, recordingEvent.y, recordingEvent.leftClick, recordingEvent.preciseClick, recordingEvent.shiftModifier, recordingEvent.controlModifier, recordingEvent.altModifier);
+                            EndCurrentRecordingPlayback();
+                            return;
                         }
-                        else if (recordingEvent.eventType == (int)EventTypes.Key)
-                        {
-                            keyClick(recordingEvent.keyCode);
-                        }
-                        
-                        var nextEvent = i == recordingEvents.Count - 1 ? null : recordingEvents[i + 1];
-                        if (nextEvent != null)
-                        {
-                            var downTime = nextEvent.time - playbackStopWatch.ElapsedMilliseconds;
-
-                            playbackStopWatch.Start();
-                            Thread.Sleep((int)downTime);
-                        }
-                        else
-                        {
-                            playbackStopWatch.Start();
-                        }
-
-                        i++;
                     }
                 }
-
-                if (!runInfinitely)
+                catch (Exception ex)
                 {
-                    playbackLoopAmount--;
-                    if (playbackLoopAmount == 0)
-                    {
-                        EndPlayback();
-                        return;
-                    }
+                    Debug.WriteLine($"Exception: {ex.Message}");
                 }
             }
         }
@@ -408,16 +420,11 @@ namespace RunescapeHelper.Modules.AutoClicker
 
         private void resetButton_Click(object sender, EventArgs e)
         {
-            recordingEvents.Clear();
+            currentRecording.events.Clear();
             eventLog.Items.Clear();
         }
 
-        private void stopRecordingButton_Click(object sender, EventArgs e)
-        {
-            EndPlayback();
-        }
-
-        private void EndPlayback()
+        private void EndCurrentRecordingPlayback()
         {
             if (!playbackActive)
             {
@@ -426,57 +433,6 @@ namespace RunescapeHelper.Modules.AutoClicker
 
             playbackActive = false;
             playbackThread.CancelAsync();
-        }
-
-        private void exportRecordingButton_Click(object sender, EventArgs e)
-        {
-            SaveFileDialog savefile = new SaveFileDialog()
-            {
-                FileName = "default.txt",
-                Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*"
-            };
-
-            if (savefile.ShowDialog() == DialogResult.OK)
-            {
-                using (StreamWriter sw = new StreamWriter(savefile.FileName))
-                {
-                    for (var i = 0; i < recordingEvents.Count; i++)
-                    {
-                        if (recordingEvents[i].eventType == (int)EventTypes.Mouse)
-                        {
-                            sw.WriteLine($"{recordingEvents[i].eventType},{recordingEvents[i].x},{recordingEvents[i].y},{recordingEvents[i].leftClick.ToString()},{recordingEvents[i].time},{recordingEvents[i].preciseClick.ToString()},{recordingEvents[i].shiftModifier.ToString()},{recordingEvents[i].controlModifier.ToString()},{recordingEvents[i].altModifier.ToString()}");
-                        }
-                        else if (recordingEvents[i].eventType == (int)EventTypes.Key)
-                        {
-                            sw.WriteLine($"{recordingEvents[i].eventType},{recordingEvents[i].keyCode},{recordingEvents[i].keyLabel},{recordingEvents[i].time}");
-                        }
-                    }
-                }
-            }
-        }
-
-        private void importRecordingButton_Click(object sender, EventArgs e)
-        {
-            DialogResult result = openFileDialog1.ShowDialog();
-            if (result != DialogResult.OK)
-            {
-                return;
-            }
-
-            var fileName = openFileDialog1.FileName;
-
-            List<EventRecord> importedEvents = File.ReadAllLines(fileName).Select(v => EventRecord.FromCsv(v)).ToList();
-            foreach (var importedEvent in importedEvents)
-            {
-                if (importedEvent.eventType == (int)EventTypes.Mouse)
-                {
-                    LogMouseDownEvent(importedEvent.eventType, importedEvent.x, importedEvent.y, importedEvent.leftClick, importedEvent.time, importedEvent.preciseClick);
-                }
-                else if (importedEvent.eventType == (int)EventTypes.Key)
-                {
-                    LogKeyDownEvent(importedEvent.eventType, importedEvent.keyCode, importedEvent.keyLabel, importedEvent.time);
-                }
-            }
         }
 
         private void runInfinitelyCheckBox_CheckedChanged(object sender, EventArgs e)
@@ -494,25 +450,7 @@ namespace RunescapeHelper.Modules.AutoClicker
             }
         }
 
-        private void preciseCheckBox_CheckedChanged(object sender, EventArgs e)
-        {
-            if (preciseCheckBox.Checked)
-            {
-                // Remove the click recorded for checking this box
-                recordingEvents.RemoveAt(recordingEvents.Count - 1);
-                eventLog.Items.RemoveAt(eventLog.Items.Count - 1);
-
-                nextActionPrecise = true;
-            }
-        }
-
-        private void ResetNextActionPrecise()
-        {
-            preciseCheckBox.Checked = false;
-            nextActionPrecise = false;
-        }
-
-        private void SuspendPlayback()
+        private void SuspendCurrentRecordingPlayback()
         {
             if (!playbackActive)
             {
@@ -523,21 +461,16 @@ namespace RunescapeHelper.Modules.AutoClicker
             {
                 // Resume Playback
                 playbackStopWatch.Start();
-                suspendPlaybackButton.Text = "Suspend Playback (F3)";
+                suspendToolStripMenuItem.Text = "Suspend Playback (F3)";
                 suspensionActive = false;
             }
             else
             {
                 // Suspend Playback
                 playbackStopWatch.Stop();
-                suspendPlaybackButton.Text = "Resume Playback (F3)";
+                suspendToolStripMenuItem.Text = "Resume Playback (F3)";
                 suspensionActive = true;
             }
-        }
-
-        private void suspendPlaybackButton_Click(object sender, EventArgs e)
-        {
-            SuspendPlayback();
         }
 
         private void backToolStripMenuItem_Click(object sender, EventArgs e)
@@ -547,12 +480,162 @@ namespace RunescapeHelper.Modules.AutoClicker
 
         private void AutoClickerMainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            EndPlayback();
+            EndCurrentRecordingPlayback();
             MainForm.mainForm.Show();
+        }
+
+        private void importToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            DialogResult result = openFileDialog1.ShowDialog();
+            if (result != DialogResult.OK)
+            {
+                return;
+            }
+
+            var fileName = openFileDialog1.FileName;
+
+            var recordingSet = new RecordingSet();
+            recordingSet.recordings = JsonConvert.DeserializeObject<List<Recording>>(File.ReadAllText(fileName));
+            currentRecordingSet = recordingSet;
+
+            foreach (var item in viewToolStripMenuItem.DropDownItems)
+            {
+                viewToolStripMenuItem.DropDownItems.RemoveByKey(((ToolStripMenuItem)item).Name);
+            }
+
+            var count = 1;
+            foreach (var recording in recordingSet.recordings)
+            {
+                var newDropDownItem = new ToolStripMenuItem()
+                {
+                    Text = $"Recording #{count}",
+                    Name = recording.id.ToString()
+                };
+                newDropDownItem.Click += LoadRecording;
+
+                viewToolStripMenuItem.DropDownItems.Add(newDropDownItem);
+                count++;
+            }
+        }
+
+        private void exportToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            SaveFileDialog savefile = new SaveFileDialog()
+            {
+                FileName = "playbackset.json",
+                Filter = "Json files (*.json)|*.json"
+            };
+
+            if (savefile.ShowDialog() == DialogResult.OK)
+            {
+                using (StreamWriter sw = new StreamWriter(savefile.FileName))
+                {
+                    sw.Write(JsonConvert.SerializeObject(currentRecordingSet.recordings));
+                }
+            }
+        }
+
+        private void startToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            StartCurrentRecordingPlayback();
+        }
+
+        private void stopToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            EndCurrentRecordingPlayback();
+        }
+
+        private void suspendToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            SuspendCurrentRecordingPlayback();
+        }
+
+        private void addToSetButton_Click(object sender, EventArgs e)
+        {
+            currentRecordingSet.recordings.Add(currentRecording);
+
+            var newDropDownItem = new ToolStripMenuItem()
+            {
+                Text = $"Recording #{currentRecordingSet.recordings.Count}",
+                Name = currentRecording.id.ToString()
+            };
+            newDropDownItem.Click += LoadRecording;
+
+            viewToolStripMenuItem.DropDownItems.Add(newDropDownItem);
+        }
+
+        private void LoadRecording(object sender, EventArgs e)
+        {
+            var recordingId = new Guid(((ToolStripMenuItem)sender).Name);
+
+            var recording = currentRecordingSet.recordings.Where(x => x.id.Equals(recordingId)).First();
+            currentRecording = recording;
+
+            eventLog.Items.Clear();
+            foreach (var importedEvent in recording.events)
+            {
+                var timeSpan = TimeSpan.FromMilliseconds(importedEvent.time);
+
+                string action = importedEvent.leftClick ? "Left Click" : "Right Click";
+                var eventLogItem = new ListViewItem(action)
+                {
+                    SubItems =
+                {
+                    $"({importedEvent.x},{importedEvent.y})",
+                    $"{timeSpan.Minutes}:{timeSpan.Seconds}:{timeSpan.Milliseconds}"
+                }
+                };
+
+                eventLog.Items.Add(eventLogItem);
+            }
+        }
+
+        private void playbackFromSet_CheckedChanged(object sender, EventArgs e)
+        {
+            setPlaybackActive = ((CheckBox)sender).Checked;
+        }
+
+        private void removeRecordingFromSet_Click(object sender, EventArgs e)
+        {
+            if (currentRecording == null || currentRecording.id == null)
+            {
+                return;
+            }
+
+            viewToolStripMenuItem.DropDownItems.RemoveByKey(currentRecording.id.ToString());
+
+            var count = 1;
+            foreach (var item in viewToolStripMenuItem.DropDownItems)
+            {
+                ((ToolStripMenuItem)item).Text = $"Recording #{count}";
+                count++;
+            }
         }
     }
 
-    public class EventRecord
+    public class RecordingSet
+    {
+        public List<Recording> recordings;
+
+        public RecordingSet()
+        {
+            recordings = new List<Recording>();
+        }
+    }
+
+    public class Recording
+    {
+        public List<Event> events;
+        public Guid id;
+
+        public Recording()
+        {
+            events = new List<Event>();
+            id = Guid.NewGuid();
+        }
+    }
+
+    public class Event
     {
         private enum EventTypes
         {
@@ -567,15 +650,14 @@ namespace RunescapeHelper.Modules.AutoClicker
         public string keyLabel;
         public bool leftClick;
         public long time;
-        public bool preciseClick;
         public bool shiftModifier;
         public bool controlModifier;
         public bool altModifier;
 
-        public static EventRecord FromCsv(string line)
+        public static Event FromCsv(string line)
         {
             string[] values = line.Split(',');
-            EventRecord eventRecord = new EventRecord()
+            Event eventRecord = new Event()
             {
                 eventType = Convert.ToInt32(values[0])
             };
@@ -586,10 +668,9 @@ namespace RunescapeHelper.Modules.AutoClicker
                 eventRecord.y = Convert.ToInt32(values[2]);
                 eventRecord.leftClick = Convert.ToBoolean(values[3]);
                 eventRecord.time = Convert.ToInt64(values[4]);
-                eventRecord.preciseClick = Convert.ToBoolean(values[5]);
-                eventRecord.shiftModifier = Convert.ToBoolean(values[6]);
-                eventRecord.controlModifier = Convert.ToBoolean(values[7]);
-                eventRecord.altModifier = Convert.ToBoolean(values[8]);
+                eventRecord.shiftModifier = Convert.ToBoolean(values[5]);
+                eventRecord.controlModifier = Convert.ToBoolean(values[6]);
+                eventRecord.altModifier = Convert.ToBoolean(values[7]);
             }
             else if (eventRecord.eventType == (int)EventTypes.Key)
             {

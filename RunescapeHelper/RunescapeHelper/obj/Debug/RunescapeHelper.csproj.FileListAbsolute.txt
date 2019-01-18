@@ -13,3 +13,6 @@ C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelpe
 C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.SeersVillageAgility.TeleportConfigurationDialog.resources
 C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.Combat.CombatMainForm.resources
 C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\obj\Debug\RunescapeHelper.Modules.Combat.NpcColorConfigurationDialog.resources
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\bin\Debug\Newtonsoft.Json.dll
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\bin\Debug\Newtonsoft.Json.pdb
+C:\Users\ecurri3\Documents\GitHub\RunescapeHelper\RunescapeHelper\RunescapeHelper\bin\Debug\Newtonsoft.Json.xml
